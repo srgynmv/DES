@@ -81,14 +81,20 @@ def __feistel_transform(in_block: bitarray, key: bitarray) -> bitarray:
     return out_block
 
 
-def __process_block(block: bytes, generated_keys: List[bitarray]) -> bytes:
+def __process_block(block: bytes, generated_keys: List[bitarray], decode=False) -> bytes:
     assert len(block) == constants.block_size
 
-    __verbose_print("Input block: " + block.decode('utf-8'))
+    try:
+        __verbose_print("Input block: " + block.decode('utf-8'))
+    except UnicodeDecodeError:
+        __verbose_print("Input block: " + str(block))
+
     bit_block = __do_initial_permutation(block)
     __verbose_print("Shuffled block: " + __format_bitarray_by_block(bit_block))
 
-    for idx in range(constants.cypher_cycles_count):
+    range_gen = range(constants.cypher_cycles_count - 1, -1, -1) if decode else range(constants.cypher_cycles_count)
+
+    for idx in range_gen:
         __verbose_print("Round {}:".format(idx + 1))
         bit_block = __feistel_transform(bit_block, generated_keys[idx])
 
@@ -151,12 +157,7 @@ def __generate_keys(key: bytes) -> List[bitarray]:
     return result_keys
 
 
-def encode(data: bytes, key: bytes) -> bytes:
-    # Align the data by block_size if needed
-    unaligned_bytes_count = len(data) % constants.block_size
-    if unaligned_bytes_count:
-        data += b'\0' * (constants.block_size - unaligned_bytes_count)
-
+def __process_data(data: bytes, key: bytes, decode=False) -> bytes:
     __verbose_print("Generating keys for rounds...")
     generated_keys = __generate_keys(key)
 
@@ -165,10 +166,22 @@ def encode(data: bytes, key: bytes) -> bytes:
     block_count = len(data) // constants.block_size
     for block_idx in range(block_count):
         result += __process_block(data[block_idx * constants.block_size:(block_idx + 1) * constants.block_size],
-                                  generated_keys)
+                                  generated_keys, decode)
 
     return result
 
 
-def decode(data: bytes, key: bytes) -> bytes:
-    pass  # TODO
+def encode(data: bytes, key: bytes) -> bytes:
+    # Align the data by block_size if needed
+    unaligned_bytes_count = len(data) % constants.block_size
+    if unaligned_bytes_count:
+        data += b'\0' * (constants.block_size - unaligned_bytes_count)
+
+    return __process_data(data, key, False)
+
+
+def decode(data: bytes, key: bytes, data_in_hex=False) -> bytes:
+    if data_in_hex:
+        data = data.fromhex(str(data))
+
+    return __process_data(data, key, True)
