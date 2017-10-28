@@ -259,15 +259,11 @@ def encode(data: bytes, key: bytes) -> bytes:
     return __process_data(data, key, False)
 
 
-def decode(data: bytes, key: bytes, data_in_hex=False) -> bytes:
+def decode(data: bytes, key: bytes) -> bytes:
     """Decodes the data passed in arguments using the key.
 
     :param data: Data to be decoded.
     :param key: Key used to decode. Must be 7 or 8 bytes length.
-    :param data_in_hex: True if data from arguments in the hex format, False otherwise.
     :return: Decoded bytes.
     """
-    if data_in_hex:
-        data = data.fromhex(data.decode())
-
     return __process_data(data, key, True)
