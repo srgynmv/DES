@@ -229,7 +229,7 @@ def __process_data(data: bytes, key: bytes, decode=False) -> bytes:
     :param data: Data to be processed.
     :param key: Key used to process.
     :param decode: Determines decode or encode mode. True for decode, False otherwise.
-    :return:
+    :return: Processed data.
     """
     __verbose_print("Generating keys for rounds...")
     generated_keys = __generate_keys(key)
