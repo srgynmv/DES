@@ -8,21 +8,41 @@ is_verbose = False
 
 
 def set_verbose(value: bool):
+    """Sets the need for detailed output of each part of the algorithm.
+
+    :param value: True for enable this mode, False otherwise.
+    """
     global is_verbose
     is_verbose = value
 
 
 def __verbose_print(text: str):
+    """Prints the text passed to the function if verbose mode is enabled.
+
+    :param text: Human-readable string.
+    """
     if is_verbose:
         print(text)
 
 
 def __format_bitarray_by_block(bits: bitarray, block_size: int = 8) -> str:
+    """Separates bits by blocks of length specified by **block_size** parameter.
+
+    :param bits: Bitarray object that will be formatted.
+    :param block_size: Block length.
+    :return: String containing the blocks separated by space character.
+    """
     bits_str = bits.to01()
     return ' '.join(bits_str[idx * block_size: (idx + 1) * block_size] for idx in range(len(bits) // block_size))
 
 
 def __permute(block: bitarray, table: List[int]) -> bitarray:
+    """Utility function to permute any sequence using the permutation table.
+
+    :param block: Sequence that will be permuted.
+    :param table: Table used for permutation.
+    :return: Permuted sequence.
+    """
     table_len = len(table)
 
     result_block = bitarray(table_len)
@@ -33,6 +53,12 @@ def __permute(block: bitarray, table: List[int]) -> bitarray:
 
 
 def __do_initial_permutation(byte_block: bytes) -> bitarray:
+    """Performs the initial permutation using the IP table
+    and converts the input byte block to the bitarray object.
+
+    :param byte_block: Block for permutation.
+    :return: Permuted block stored in the bitarray object.
+    """
     bit_block = bitarray()
     bit_block.frombytes(byte_block)
 
@@ -43,6 +69,12 @@ def __do_initial_permutation(byte_block: bytes) -> bitarray:
 
 
 def __transform_b_blocks(b_blocks: bitarray) -> bitarray:
+    """Performs the substitution using the substitution boxes.
+    Each of the eight S-boxes replaces its 6 input bits with 4 output bits.
+
+    :param b_blocks: Input b-blocks with 48-bit total length.
+    :return: Transformed 32-bit b-blocks.
+    """
     transformed_b_blocks = bitarray()
 
     for idx in range(constants.b_block_count):
@@ -59,15 +91,30 @@ def __transform_b_blocks(b_blocks: bitarray) -> bitarray:
 
 
 def __feistel_fn(block_half: bitarray, key: bitarray) -> bitarray:
+    """The Feistel function. For more information see:
+    `<https://en.wikipedia.org/wiki/Data_Encryption_Standard#The_Feistel_(F)_function>`_
+
+    :param block_half: Input 32-bit half-block.
+    :param key: 48-bit subkey.
+    :return: 32-bit permuted block.
+    """
+    # Expansion
     expanded_block = __permute(block_half, constants.e_table)
-
+    # Key mixing
     b_blocks = expanded_block ^ key
+    # Substitution
     transformed_b_blocks = __transform_b_blocks(b_blocks)
-
+    # Permutation
     return __permute(transformed_b_blocks, constants.p_table)
 
 
-def __feistel_transform(in_block: bitarray, key: bitarray) -> bitarray:
+def __feistel_round(in_block: bitarray, key: bitarray) -> bitarray:
+    """Performs the one round of DES algorithm.
+
+    :param in_block: Block from previous Feistel round or the initial block.
+    :param key: Key for this round.
+    :return: Transformed block.
+    """
     block_len = len(in_block)
     block_half = block_len // 2
     out_block = bitarray(block_len)
@@ -82,6 +129,13 @@ def __feistel_transform(in_block: bitarray, key: bitarray) -> bitarray:
 
 
 def __process_block(block: bytes, generated_keys: List[bitarray], decode=False) -> bytes:
+    """Performs the decoding/encoding for the input 64-bit block.
+
+    :param block: Input block for the following procedure.
+    :param generated_keys: List of keys for the Feistel rounds.
+    :param decode: Determines decode or encode mode. True for decode, False otherwise.
+    :return: Decoded or encoded block.
+    """
     assert len(block) == constants.block_size
 
     try:
@@ -96,7 +150,7 @@ def __process_block(block: bytes, generated_keys: List[bitarray], decode=False) 
 
     for idx in range_gen:
         __verbose_print("Round {}:".format(idx + 1))
-        bit_block = __feistel_transform(bit_block, generated_keys[idx])
+        bit_block = __feistel_round(bit_block, generated_keys[idx])
 
     block_half = len(bit_block) // 2
     result_bit_block = bit_block[block_half:] + bit_block[:block_half]
@@ -109,6 +163,12 @@ def __process_block(block: bytes, generated_keys: List[bitarray], decode=False) 
 
 
 def __get_initial_key_permutation(key: bytes) -> bitarray:
+    """Expands the key if it has the 7 bytes length
+     and performs the initial permutation of the source key.
+
+    :param key: Source key for expansion (if needed) and permutation.
+    :return: Permuted key.
+    """
     bit_key = bitarray()
     bit_key.frombytes(key)
 
@@ -129,6 +189,11 @@ def __get_initial_key_permutation(key: bytes) -> bitarray:
 
 
 def __generate_keys(key: bytes) -> List[bitarray]:
+    """Generates keys for each Feistel round.
+
+    :param key: The source key for generation.
+    :return: List of keys for each round.
+    """
     assert len(key) in [constants.key_size_bytes, constants.expanded_key_size_bytes]
 
     result_keys = []
@@ -158,6 +223,14 @@ def __generate_keys(key: bytes) -> List[bitarray]:
 
 
 def __process_data(data: bytes, key: bytes, decode=False) -> bytes:
+    """Splits the data by 8 bytes blocks and generates keys for each cypher cycle.
+    Processes data by blocks and merges result to the one byte string.
+
+    :param data: Data to be processed.
+    :param key: Key used to process.
+    :param decode: Determines decode or encode mode. True for decode, False otherwise.
+    :return:
+    """
     __verbose_print("Generating keys for rounds...")
     generated_keys = __generate_keys(key)
 
@@ -172,6 +245,12 @@ def __process_data(data: bytes, key: bytes, decode=False) -> bytes:
 
 
 def encode(data: bytes, key: bytes) -> bytes:
+    """Encodes the data passed in arguments using the key.
+
+    :param data: Data to be encoded.
+    :param key: Key used to encode. Must be 7 or 8 bytes length.
+    :return: Encoded bytes.
+    """
     # Align the data by block_size if needed
     unaligned_bytes_count = len(data) % constants.block_size
     if unaligned_bytes_count:
@@ -181,7 +260,14 @@ def encode(data: bytes, key: bytes) -> bytes:
 
 
 def decode(data: bytes, key: bytes, data_in_hex=False) -> bytes:
+    """Decodes the data passed in arguments using the key.
+
+    :param data: Data to be decoded.
+    :param key: Key used to decode. Must be 7 or 8 bytes length.
+    :param data_in_hex: True if data from arguments in the hex format, False otherwise.
+    :return: Decoded bytes.
+    """
     if data_in_hex:
-        data = data.fromhex(str(data))
+        data = data.fromhex(data.decode())
 
     return __process_data(data, key, True)
